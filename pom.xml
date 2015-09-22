@@ -26,7 +26,7 @@
 						</goals>
 						<configuration>
 							<minimizeJar>false</minimizeJar>
-							<finalName>JMSTest</finalName>
+							<finalName>Clustering</finalName>
 							<shadedArtifactAttached>true</shadedArtifactAttached>
 							<shadedClassifierName>fatJar</shadedClassifierName> <!-- Any name that makes sense -->
 							<filters>
@@ -44,7 +44,7 @@
 									implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
 								<transformer
 									implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-									<mainClass>JMSTest</mainClass>
+									<mainClass>com.boxymoron.ha.ClusterMemberTest</mainClass>
 								</transformer>
 							</transformers>
 						</configuration>
