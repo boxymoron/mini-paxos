@@ -16,41 +16,30 @@
 				</configuration>
 			</plugin>
 			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-shade-plugin</artifactId>
-				<version>2.3</version>
-				<executions>
-					<execution>
-						<goals>
-							<goal>shade</goal>
-						</goals>
-						<configuration>
-							<minimizeJar>false</minimizeJar>
-							<finalName>Clustering</finalName>
-							<shadedArtifactAttached>true</shadedArtifactAttached>
-							<shadedClassifierName>fatJar</shadedClassifierName> <!-- Any name that makes sense -->
-							<filters>
-								<filter>
-									<artifact>*:*</artifact>
-									<excludes>
-										<exclude>**/*.DSA</exclude>
-										<exclude>**/*.RSA</exclude>
-										<exclude>**/*.SF</exclude>
-									</excludes>
-								</filter>
-							</filters>
-							<transformers>
-								<transformer
-									implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
-								<transformer
-									implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-									<mainClass>com.boxymoron.ha.ClusterMemberTest</mainClass>
-								</transformer>
-							</transformers>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
+	          <groupId>org.apache.maven.plugins</groupId>
+	          <artifactId>maven-shade-plugin</artifactId>
+	          <version>2.1</version>
+	          <executions>
+	            <execution>
+	              <phase>package</phase>
+	              <goals><goal>shade</goal></goals>
+	              <configuration>
+	                <transformers>
+	                  <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+	                    <mainClass>com.boxymoron.ha.ClusterMemberTest</mainClass>
+	                  </transformer>
+	                  <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+	                    <resource>META-INF/spring.handlers</resource>
+	                  </transformer>
+	                  <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+	                    <resource>META-INF/spring.schemas</resource>
+	                  </transformer>
+	                </transformers>
+	                <finalName>mini-paxos</finalName>
+	              </configuration>
+	            </execution>
+	          </executions>
+	        </plugin>
 		</plugins>
 
 	</build>
