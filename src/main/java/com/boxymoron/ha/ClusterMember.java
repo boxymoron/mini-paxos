@@ -31,7 +31,7 @@ import java.util.regex.Pattern;
  * The API provides a joinCluster({@link ClusterMember.Listener}) method to register a state changed listener. The listener can then
  * be used to control application specific behavior, such as starting/stopping services.
  * 
- * @author lnra54@gmail.com
+ * @author Leonardo Rodriguez-Velez
  *
  */
 public class ClusterMember {
