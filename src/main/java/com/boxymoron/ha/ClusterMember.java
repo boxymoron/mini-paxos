@@ -251,28 +251,9 @@ public class ClusterMember {
 
 		final Enumeration<NetworkInterface> nets = NetworkInterface.getNetworkInterfaces();
 		final String[] addrs = props.getProperty("members").split(",");
-		for(final String addr : addrs){
+		for(String addr : addrs){
 			final InetAddress currInetAddr = InetAddress.getByName(addr);
-			out:{//haven't used one of these in a while :)
-				for (final NetworkInterface netint : Collections.list(nets)){
-					final Enumeration<InetAddress> inetAddresses = netint.getInetAddresses();
-					for(final InetAddress inetAddr : Collections.list(inetAddresses)){
-						if(currInetAddr.getAddress().length != inetAddr.getAddress().length){
-							System.out.println("Ignoring thyself("+currInetAddr+") from members list.");
-							break out;
-						}
-						for(byte b1 : currInetAddr.getAddress()){
-							for(byte b2 : inetAddr.getAddress()){
-								if(b1 != b2){
-									System.out.println("Ignoring thyself("+currInetAddr+") from members list.");
-									break out;
-								}
-							}
-						}
-					}
-				}
-				members.add(currInetAddr);
-			}
+			members.add(currInetAddr);
 		}
 	}
 
