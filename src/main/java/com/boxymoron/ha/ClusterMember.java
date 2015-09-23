@@ -9,12 +9,9 @@ import java.io.Reader;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Enumeration;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -29,9 +26,9 @@ import java.util.regex.Pattern;
  * <li>Each node sends a message with its own 'priority', which is a an integer in the range 0 - 9999 every {@link ClusterMember#timeout_ms}/2 ms.<br>
  * <li>Each node listens to all other node's messages.<br>
  * <li>The node with the highest priority is the MASTER.<br><br>
- * For this mechanism to work correctly, each node should have a different priority.<br><br>
+ * For this mechanism to work correctly, each node should have a different priority. Currently, only two nodes are supported ;)<br><br>
  * 
- * The API provides a joinCluster({@link ClusterMember.Listener}) method to register an state changed listener. The listener can then
+ * The API provides a joinCluster({@link ClusterMember.Listener}) method to register a state changed listener. The listener can then
  * be used to control application specific behavior, such as starting/stopping services.
  * 
  * @author lnra54@gmail.com
