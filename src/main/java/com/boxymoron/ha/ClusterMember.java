@@ -249,11 +249,11 @@ public class ClusterMember {
 
 		port = Integer.parseInt(props.getProperty("port", ""+port));
 
-		final Enumeration<NetworkInterface> nets = NetworkInterface.getNetworkInterfaces();
 		final String[] addrs = props.getProperty("members").split(",");
 		for(String addr : addrs){
 			final InetAddress currInetAddr = InetAddress.getByName(addr);
 			members.add(currInetAddr);
+			System.out.println("Registering remote cluster member: "+currInetAddr);
 		}
 	}
 
