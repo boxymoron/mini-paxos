@@ -55,7 +55,7 @@ public class ClusterMember {
 	 */
 	private static int timeout_ms = 31000;
 	private static int port = 8888;
-	private static List<InetAddress> members = new ArrayList<InetAddress>();
+	private static List<Member> members = new ArrayList<Member>();
 
 	private static int priority;
 
@@ -72,6 +72,39 @@ public class ClusterMember {
 	 */
 	public static enum State {
 		MASTER, SLAVE, UNDEFINED
+	}
+	
+	public static class Member {
+		public InetAddress address;
+		public long lastRxPacket;
+		public int priority = -1;
+		public Member(InetAddress address, long lastRxPacket) {
+			this.address = address;
+			this.lastRxPacket = lastRxPacket;
+		}
+		public InetAddress getAddress() {
+			return this.address;
+		}
+		public long getLastRxPacket() {
+			return lastRxPacket;
+		}
+		public void setLastRxPacket(long lastRxPacket) {
+			this.lastRxPacket = lastRxPacket;
+		}
+		public int getPriority() {
+			return priority;
+		}
+		public void setPriority(int priority) {
+			this.priority = priority;
+		}
+		public void setAddress(InetAddress address) {
+			this.address = address;
+		}
+		@Override
+		public String toString() {
+			return "Member [address=" + address + ", lastRxPacket="
+					+ lastRxPacket + ", priority=" + priority + "]";
+		}
 	}
 
 	/**
@@ -129,8 +162,8 @@ public class ClusterMember {
 					byte[] buff = String.format("%"+BUFF_SIZE+"d", priority).getBytes("ASCII");//pad with zeroes on left
 
 					while(true){
-						for(InetAddress member : members){
-							final DatagramPacket packet = new DatagramPacket(buff, 0, buff.length, member, port);
+						for(Member member : members){
+							final DatagramPacket packet = new DatagramPacket(buff, 0, buff.length, member.getAddress(), port);
 							logger.info("Sending priority: "+priority+" to: "+member);
 							socket.send(packet);
 						}
@@ -152,7 +185,7 @@ public class ClusterMember {
 			}
 		});
 
-		pingThread.setName("pingThread");
+		pingThread.setName("priorityTX");
 		pingThread.setDaemon(true);
 		pingThread.start();
 	}
@@ -172,23 +205,33 @@ public class ClusterMember {
 					while(true){
 						try{
 							sock.receive(packet);
-							
+							long ts = System.currentTimeMillis();
 							final String dataStr = new String(packet.getData(), "ASCII");
-							logger.info("Received packet: "+dataStr+" from: "+packet.getAddress());
-							final Matcher matcher = integer.matcher(dataStr);
-							if(!matcher.find()){
-								throw new NumberFormatException("invalid priority(int) received: "+dataStr);
-							}
-							final int otherPriority = Integer.parseInt(matcher.group(1));
-							if(otherPriority < priority && !State.MASTER.equals(state)){
-								state = State.MASTER;
-								listener.onStateChange(state);
-							}else if(otherPriority > priority && !State.SLAVE.equals(state)){
-								state = State.SLAVE;
-								listener.onStateChange(state);
-							}else if(otherPriority == priority && (!State.UNDEFINED.equals(state) || count == 0)){//handle initial UNDEFINED state
-								state = State.UNDEFINED;
-								listener.onStateChange(state);
+							for(Member m : members){
+								if(m.address.getAddress().length == packet.getAddress().getAddress().length){
+									for(int i=0; i< m.address.getAddress().length; i++){
+										if(m.address.getAddress()[i] != packet.getAddress().getAddress()[i]){
+											break;
+										}
+									}
+									logger.info("Received packet: "+dataStr+" from: "+packet.getAddress());
+									m.setLastRxPacket(ts);
+									final Matcher matcher = integer.matcher(dataStr);
+									if(!matcher.find()){
+										throw new NumberFormatException("invalid priority(int) received: "+dataStr);
+									}
+									final int otherPriority = Integer.parseInt(matcher.group(1));
+									if(otherPriority < priority && !State.MASTER.equals(state)){
+										state = State.MASTER;
+										listener.onStateChange(state);
+									}else if(otherPriority > priority && !State.SLAVE.equals(state)){
+										state = State.SLAVE;
+										listener.onStateChange(state);
+									}else if(otherPriority == priority && (!State.UNDEFINED.equals(state) || count == 0)){//handle initial UNDEFINED state
+										state = State.UNDEFINED;
+										listener.onStateChange(state);
+									}
+								}
 							}
 							count++;
 						}catch(NumberFormatException nfe){
@@ -223,7 +266,7 @@ public class ClusterMember {
 		});
 
 		keepAliveThread.setDaemon(true);
-		keepAliveThread.setName("statusChecker");
+		keepAliveThread.setName("priorityRX");
 		keepAliveThread.start();
 	}
 
@@ -255,26 +298,26 @@ public class ClusterMember {
 		final String[] addrs = props.getProperty("members").split(",");
 		for(String addr : addrs){
 			final InetAddress currInetAddr = InetAddress.getByName(addr);
-			members.add(currInetAddr);
+			members.add(new Member(currInetAddr, -1));
 			logger.info("Registering remote cluster member: "+currInetAddr);
 		}
 	}
 
 	public static void loadProperties(Properties properties, String defaultPropsLocation) throws IOException, FileNotFoundException {
 		final String propertiesFile = System.getProperty(defaultPropsLocation);
-		if(null == propertiesFile){
-			final InputStream is = ClusterMember.class.getClassLoader().getResourceAsStream(defaultPropsLocation);
-			try{
-				properties.load(is);
-			}finally{
-				is.close();
-			}
-		}else if(new File(propertiesFile).canRead()){
+		if(new File(propertiesFile).canRead()){
 			final Reader reader = new FileReader(propertiesFile);
 			try{
 				properties.load(reader);
 			}finally{
 				reader.close();
+			}
+		}else if(null == propertiesFile){
+			final InputStream is = ClusterMember.class.getClassLoader().getResourceAsStream(defaultPropsLocation);
+			try{
+				properties.load(is);
+			}finally{
+				is.close();
 			}
 		}else{
 			throw new IOException(new StringBuilder("Invalid ").append(defaultPropsLocation).append(" file: ").append(propertiesFile).toString());

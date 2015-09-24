@@ -20,24 +20,24 @@ public class ClusterMemberTest {
 	public static void main(String[] args) throws FileNotFoundException, IOException, InterruptedException, NatPmpException {
 		logger.info("Starting");
 		
-		setPortForwarding();
-		
+		final Properties props = new Properties();
+		ClusterMember.loadProperties(props, "cluster.properties");
+		if(Boolean.parseBoolean(props.getProperty("enablePortForwarding", "false"))){
+			setPortForwarding(Integer.parseInt(props.getProperty("port")));
+		}
+
 		ClusterMember.joinCluster(new Listener(){
 			@Override
 			public void onStateChange(State state) {
-				logger.info("State: "+state);
+				logger.info("State changed to: "+state);
 			}
 			
 		});
 		Thread.sleep(999999999);
 		
 	}
-	private static void setPortForwarding() throws IOException, FileNotFoundException, NatPmpException {
-		final Properties props = new Properties();
-		ClusterMember.loadProperties(props, "cluster.properties");
-		
+	private static void setPortForwarding(int port) throws IOException, FileNotFoundException, NatPmpException {
 		final NATUtils natUtils = new NATUtils();
-		final Integer port = Integer.parseInt(props.getProperty("port"));
 		logger.info("Setting port mapping for port: "+port);
 		try{
 			natUtils.mapUPNP("localhost", port, port, port, port);
