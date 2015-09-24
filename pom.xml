@@ -5,6 +5,27 @@
 	<artifactId>mini-paxos</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 
+	<dependencies>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>1.6.4</version>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-log4j12</artifactId>
+			<version>1.7.12</version>
+		</dependency>
+		<dependency>
+			<groupId>net.tomp2p</groupId>
+			<artifactId>TomP2P</artifactId>
+			<version>4.0.4-SNAPSHOT</version>
+			<systemPath>${basedir}/lib/TomP2P.jar</systemPath>
+			<scope>system</scope>
+		</dependency>
+	</dependencies>
+
 	<build>
 		<plugins>
 			<plugin>
@@ -16,30 +37,32 @@
 				</configuration>
 			</plugin>
 			<plugin>
-	          <groupId>org.apache.maven.plugins</groupId>
-	          <artifactId>maven-shade-plugin</artifactId>
-	          <version>2.1</version>
-	          <executions>
-	            <execution>
-	              <phase>package</phase>
-	              <goals><goal>shade</goal></goals>
-	              <configuration>
-	                <transformers>
-	                  <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-	                    <mainClass>com.boxymoron.ha.ClusterMemberTest</mainClass>
-	                  </transformer>
-	                  <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
-	                    <resource>META-INF/spring.handlers</resource>
-	                  </transformer>
-	                  <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
-	                    <resource>META-INF/spring.schemas</resource>
-	                  </transformer>
-	                </transformers>
-	                <finalName>mini-paxos</finalName>
-	              </configuration>
-	            </execution>
-	          </executions>
-	        </plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-shade-plugin</artifactId>
+				<version>2.1</version>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>shade</goal>
+						</goals>
+						<configuration>
+							<transformers>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+									<mainClass>com.boxymoron.ha.ClusterMemberTest</mainClass>
+								</transformer>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+									<resource>META-INF/spring.handlers</resource>
+								</transformer>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+									<resource>META-INF/spring.schemas</resource>
+								</transformer>
+							</transformers>
+							<finalName>mini-paxos</finalName>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
 
 	</build>

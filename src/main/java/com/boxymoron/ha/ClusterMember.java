@@ -13,11 +13,15 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class implements a simple HA Master/Slave clustering mechanism through what is essentially a state machine.<br><br>
@@ -25,16 +29,18 @@ import java.util.regex.Pattern;
  * <li>Each node in the cluster maintains a static list of all cluster member IP addresses/hostnames.<br>
  * <li>Each node sends a message with its own 'priority', which is a an integer in the range 0 - 9999 every {@link ClusterMember#timeout_ms}/2 ms.<br>
  * <li>Each node listens to all other node's messages.<br>
- * <li>The node with the highest priority is the MASTER.<br><br>
+ * <li>The node with the highest priority becomes the MASTER.<br><br>
  * For this mechanism to work correctly, each node should have a different priority. Currently, only two nodes are supported ;)<br><br>
  * 
  * The API provides a joinCluster({@link ClusterMember.Listener}) method to register a state changed listener. The listener can then
- * be used to control application specific behavior, such as starting/stopping services.
+ * be used to control application specific behavior, such as starting/stopping services, replication, etc.
  * 
  * @author Leonardo Rodriguez-Velez
  *
  */
 public class ClusterMember {
+	
+	private static Logger logger = LoggerFactory.getLogger(ClusterMember.class);
 
 	private static Properties props = new Properties();
 
@@ -125,7 +131,7 @@ public class ClusterMember {
 					while(true){
 						for(InetAddress member : members){
 							final DatagramPacket packet = new DatagramPacket(buff, 0, buff.length, member, port);
-							System.out.println("Sending priority: "+priority+" to: "+member);
+							logger.info("Sending priority: "+priority+" to: "+member);
 							socket.send(packet);
 						}
 						try{
@@ -168,7 +174,7 @@ public class ClusterMember {
 							sock.receive(packet);
 							
 							final String dataStr = new String(packet.getData(), "ASCII");
-							System.out.println("Received packet: "+dataStr+" from: "+packet.getAddress());
+							logger.info("Received packet: "+dataStr+" from: "+packet.getAddress());
 							final Matcher matcher = integer.matcher(dataStr);
 							if(!matcher.find()){
 								throw new NumberFormatException("invalid priority(int) received: "+dataStr);
@@ -191,7 +197,7 @@ public class ClusterMember {
 							listener.onStateChange(state);
 						}catch(SocketTimeoutException ste){
 							//ste.printStackTrace();
-							System.out.println("Packet timed out.");
+							logger.info("Packet timed out.");
 							totalTimeoutCount.incrementAndGet();
 							timeoutCount.incrementAndGet();
 							if(!State.MASTER.equals(state)){
@@ -250,7 +256,7 @@ public class ClusterMember {
 		for(String addr : addrs){
 			final InetAddress currInetAddr = InetAddress.getByName(addr);
 			members.add(currInetAddr);
-			System.out.println("Registering remote cluster member: "+currInetAddr);
+			logger.info("Registering remote cluster member: "+currInetAddr);
 		}
 	}
 
@@ -272,6 +278,9 @@ public class ClusterMember {
 			}
 		}else{
 			throw new IOException(new StringBuilder("Invalid ").append(defaultPropsLocation).append(" file: ").append(propertiesFile).toString());
+		}
+		for(Entry<Object, Object> entry : properties.entrySet()){
+			logger.info(entry.getKey()+"="+entry.getValue());
 		}
 	}
 
