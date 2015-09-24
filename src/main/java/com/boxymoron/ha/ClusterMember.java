@@ -191,23 +191,19 @@ public class ClusterMember {
 				while(true){
 					
 					long ts = System.currentTimeMillis();
-					if(!State.MASTER.equals(state) && members.stream().allMatch(m -> m.isExpired(ts))){
+					if(!State.UNDEFINED.equals(state) && members.stream().anyMatch(m -> m.priority == priority)){
+						state = State.UNDEFINED;
+						listener.onStateChange(state);
+						logger.info("State changed to: "+state+" "+4);
+					}else if(!State.MASTER.equals(state) && members.stream().allMatch(m -> m.isExpired(ts))){
 						state = State.MASTER;
 						listener.onStateChange(state);
 						logger.info("State changed to: "+state+" "+1);
 					} else {
-						if(!State.MASTER.equals(state) && members.stream().noneMatch(m -> m.priority > priority)){
-							state = State.MASTER;
-							listener.onStateChange(state);
-							logger.info("State changed to: "+state+" "+2);
-						}else if(!State.SLAVE.equals(state) && members.stream().anyMatch(m -> !m.isExpired(ts) && m.priority > priority)){
+						if(!State.SLAVE.equals(state) && members.stream().anyMatch(m -> !m.isExpired(ts) && m.priority > priority)){
 							state = State.SLAVE;
 							listener.onStateChange(state);
 							logger.info("State changed to: "+state+" "+3);
-						}else if(members.stream().anyMatch(m -> m.priority == priority)){
-							state = State.UNDEFINED;
-							listener.onStateChange(state);
-							logger.info("State changed to: "+state+" "+4);
 						}else if(!State.MASTER.equals(state)){
 							final List<Member> membersCurr = members.stream().filter(m -> !m.isExpired(ts)).collect(Collectors.toList());
 							if(membersCurr.size() > 0 && membersCurr.stream().allMatch(m -> m.priority < priority)){
