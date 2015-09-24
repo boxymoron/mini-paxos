@@ -100,6 +100,9 @@ public class ClusterMember {
 		public void setAddress(InetAddress address) {
 			this.address = address;
 		}
+		public boolean isExpired(long currTS){
+			return (currTS - lastRxPacket) > timeout_ms;
+		}
 
 		@Override
 		public String toString() {
@@ -228,12 +231,11 @@ public class ClusterMember {
 					int count = 0;
 					final DatagramPacket packet = new DatagramPacket(buff, BUFF_SIZE);
 					while(true){
-						try{
-							int candidateCount = 0;
+						try{;
+							long ts;
 							start:{
-								candidateCount = 0;
 								sock.receive(packet);
-								long ts = System.currentTimeMillis();
+								ts = System.currentTimeMillis();
 								final String dataStr = new String(packet.getData(), "ASCII");
 
 								for(Member m : members){
@@ -247,9 +249,7 @@ public class ClusterMember {
 										m.setPriority(otherPriority);
 										logger.info("Received packet: "+dataStr+" from: "+m);
 										
-										if(m.getPriority() < priority){
-											candidateCount++;
-										}else if(m.getPriority() == priority && (!State.UNDEFINED.equals(state) || count == 0)){//handle initial UNDEFINED state
+										if(m.getPriority() == priority && (!State.UNDEFINED.equals(state) || count == 0)){//handle initial UNDEFINED state
 											state = State.UNDEFINED;
 											listener.onStateChange(state);
 											break start;
@@ -258,13 +258,26 @@ public class ClusterMember {
 								}
 							}
 
-							logger.info("candidateCount: "+candidateCount);
-							if(candidateCount > 0 && !State.MASTER.equals(state)){
+							if(!State.MASTER.equals(state) && members.stream().allMatch(m -> m.isExpired(ts))){
 								state = State.MASTER;
 								listener.onStateChange(state);
-							}else if(!State.SLAVE.equals(state)){
-								state = State.SLAVE;
-								listener.onStateChange(state);
+							} else {
+								if(!State.MASTER.equals(state) && members.stream().noneMatch(m -> m.priority < priority)){
+									state = State.MASTER;
+									listener.onStateChange(state);
+								}else if(!State.SLAVE.equals(state) && members.stream().anyMatch(m -> !m.isExpired(ts) && m.priority > priority)){
+									state = State.SLAVE;
+									listener.onStateChange(state);
+								}else if(members.stream().anyMatch(m -> m.priority == priority)){
+									state = State.UNDEFINED;
+									listener.onStateChange(state);
+								}else if(!State.MASTER.equals(state) && members.stream().filter(m -> !m.isExpired(ts)).allMatch(m -> m.priority < priority)){
+									state = State.MASTER;
+									listener.onStateChange(state);
+								}else if(!State.SLAVE.equals(state) && members.stream().filter(m -> !m.isExpired(ts)).allMatch(m -> m.priority > priority)){
+									state = State.SLAVE;
+									listener.onStateChange(state);
+								}
 							}
 							
 							count++;
