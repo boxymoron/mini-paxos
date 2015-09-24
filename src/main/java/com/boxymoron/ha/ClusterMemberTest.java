@@ -29,7 +29,7 @@ public class ClusterMemberTest {
 		ClusterMember.joinCluster(new Listener(){
 			@Override
 			public void onStateChange(State state) {
-				logger.info("State changed to: "+state);
+				//logger.info("State changed to: "+state);
 			}
 			
 		});

@@ -19,6 +19,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +66,8 @@ public class ClusterMember {
 	private static AtomicInteger totalTimeoutCount = new AtomicInteger(); 
 
 	private static CountDownLatch latch = new CountDownLatch(1);
+	
+	private static Thread statusThread = null;
 
 	/**
 	 * Valid states.
@@ -76,8 +79,8 @@ public class ClusterMember {
 	
 	public static class Member {
 		public InetAddress address;
-		public long lastRxPacket;
-		public int priority = -1;
+		public volatile long lastRxPacket = System.currentTimeMillis();
+		public volatile int priority = -1;
 		public Member(InetAddress address, long lastRxPacket) {
 			this.address = address;
 			this.lastRxPacket = lastRxPacket;
@@ -172,15 +175,74 @@ public class ClusterMember {
 
 		});
 
-		startStatusCheckerThread(caller, listener);
-
-		startPingThread(caller, listener);
-
+		startPriorityTXThread(caller, listener);
+		startPriorityRXThread(caller, listener);
+		
 		isInitialized = true;
-		latch.await();
+		Thread.sleep(timeout_ms);
+		statusThread = startStatusThread(listener);
 	}
 
-	private static void startPingThread(final Thread caller, final Listener listener) {
+	private static Thread startStatusThread(final Listener listener) {
+		Thread statusThread = new Thread(new Runnable(){
+
+			@Override
+			public void run() {
+				while(true){
+					
+					long ts = System.currentTimeMillis();
+					if(!State.MASTER.equals(state) && members.stream().allMatch(m -> m.isExpired(ts))){
+						state = State.MASTER;
+						listener.onStateChange(state);
+						logger.info("State changed to: "+state+" "+1);
+					} else {
+						if(!State.MASTER.equals(state) && members.stream().noneMatch(m -> m.priority > priority)){
+							state = State.MASTER;
+							listener.onStateChange(state);
+							logger.info("State changed to: "+state+" "+2);
+						}else if(!State.SLAVE.equals(state) && members.stream().anyMatch(m -> !m.isExpired(ts) && m.priority > priority)){
+							state = State.SLAVE;
+							listener.onStateChange(state);
+							logger.info("State changed to: "+state+" "+3);
+						}else if(members.stream().anyMatch(m -> m.priority == priority)){
+							state = State.UNDEFINED;
+							listener.onStateChange(state);
+							logger.info("State changed to: "+state+" "+4);
+						}else if(!State.MASTER.equals(state)){
+							final List<Member> membersCurr = members.stream().filter(m -> !m.isExpired(ts)).collect(Collectors.toList());
+							if(membersCurr.size() > 0 && membersCurr.stream().allMatch(m -> m.priority < priority)){
+								state = State.MASTER;
+								listener.onStateChange(state);
+								logger.info("State changed to: "+state+" "+5);
+							}
+						}else if(!State.SLAVE.equals(state)){
+							final List<Member> membersExp = members.stream().filter(m -> !m.isExpired(ts)).collect(Collectors.toList());
+							if(membersExp.size() > 0 && membersExp.stream().allMatch(m -> m.priority > priority)){
+								state = State.SLAVE;
+								listener.onStateChange(state);
+								logger.info("State changed to: "+state+" "+6);
+							}
+						}else{
+							logger.info("State: "+state+" ");
+						}
+					}
+					
+					try {
+						Thread.sleep(500);
+					} catch (InterruptedException e) {
+						Thread.interrupted();
+					}
+				}
+			}
+			
+		});
+		statusThread.setName("statusThrd");
+		statusThread.setDaemon(true);
+		statusThread.start();
+		return statusThread;
+	}
+
+	private static void startPriorityTXThread(final Thread caller, final Listener listener) {
 		final Thread pingThread = new Thread(new Runnable(){
 			@Override
 			public void run() {
@@ -220,7 +282,7 @@ public class ClusterMember {
 
 	private static Pattern integer = Pattern.compile("\\s*(\\d+)\\s*");
 
-	private static void startStatusCheckerThread(final Thread caller, final Listener listener) {
+	private static void startPriorityRXThread(final Thread caller, final Listener listener) {
 		final Thread keepAliveThread = new Thread(new Runnable(){
 			@Override
 			public void run() {
@@ -236,6 +298,9 @@ public class ClusterMember {
 							start:{
 								sock.receive(packet);
 								ts = System.currentTimeMillis();
+								if(statusThread != null){
+									statusThread.interrupt();
+								}
 								final String dataStr = new String(packet.getData(), "ASCII");
 
 								for(Member m : members){
@@ -257,50 +322,36 @@ public class ClusterMember {
 									}
 								}
 							}
-
-							if(!State.MASTER.equals(state) && members.stream().allMatch(m -> m.isExpired(ts))){
-								state = State.MASTER;
-								listener.onStateChange(state);
-							} else {
-								if(!State.MASTER.equals(state) && members.stream().noneMatch(m -> m.priority > priority)){
-									state = State.MASTER;
-									listener.onStateChange(state);
-								}else if(!State.SLAVE.equals(state) && members.stream().anyMatch(m -> !m.isExpired(ts) && m.priority > priority)){
-									state = State.SLAVE;
-									listener.onStateChange(state);
-								}else if(members.stream().anyMatch(m -> m.priority == priority)){
-									state = State.UNDEFINED;
-									listener.onStateChange(state);
-								}else if(!State.MASTER.equals(state) && members.stream().filter(m -> !m.isExpired(ts)).allMatch(m -> m.priority < priority)){
-									state = State.MASTER;
-									listener.onStateChange(state);
-								}else if(!State.SLAVE.equals(state) && members.stream().filter(m -> !m.isExpired(ts)).allMatch(m -> m.priority > priority)){
-									state = State.SLAVE;
-									listener.onStateChange(state);
-								}
-							}
 							
 							count++;
 						}catch(NumberFormatException nfe){
 							nfe.printStackTrace();
 							state = State.UNDEFINED;
 							listener.onStateChange(state);
+							if(statusThread != null){
+								statusThread.interrupt();
+							}
 						}catch(SocketTimeoutException ste){
 							//ste.printStackTrace();
 							logger.info("Packet timed out.");
 							totalTimeoutCount.incrementAndGet();
 							timeoutCount.incrementAndGet();
-							if(!State.MASTER.equals(state)){
-								state = State.MASTER;
-								listener.onStateChange(state);
+							if(statusThread != null){
+								statusThread.interrupt();
 							}
 						}catch(SocketException se2){
 							se2.printStackTrace();
 							state = State.UNDEFINED;
 							listener.onStateChange(state);
 							caller.interrupt();
+							if(statusThread != null){
+								statusThread.interrupt();
+							}
 						}catch(IOException ioe){
 							ioe.printStackTrace();
+							if(statusThread != null){
+								statusThread.interrupt();
+							}
 							if(sock.isClosed()){
 								throw new RuntimeException("Socket is closed.");
 							}
