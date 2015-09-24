@@ -262,7 +262,7 @@ public class ClusterMember {
 								state = State.MASTER;
 								listener.onStateChange(state);
 							} else {
-								if(!State.MASTER.equals(state) && members.stream().noneMatch(m -> m.priority < priority)){
+								if(!State.MASTER.equals(state) && members.stream().noneMatch(m -> m.priority > priority)){
 									state = State.MASTER;
 									listener.onStateChange(state);
 								}else if(!State.SLAVE.equals(state) && members.stream().anyMatch(m -> !m.isExpired(ts) && m.priority > priority)){
