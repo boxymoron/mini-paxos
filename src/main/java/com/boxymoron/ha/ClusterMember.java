@@ -229,34 +229,35 @@ public class ClusterMember {
 					final DatagramPacket packet = new DatagramPacket(buff, BUFF_SIZE);
 					while(true){
 						try{
-							sock.receive(packet);
-							long ts = System.currentTimeMillis();
-							final String dataStr = new String(packet.getData(), "ASCII");
-							
-							for(Member m : members){
-								if(m.address.equals(packet.getAddress())){
-									m.setLastRxPacket(ts);
-									final Matcher matcher = integer.matcher(dataStr);
-									if(!matcher.find()){
-										throw new NumberFormatException("invalid priority(int) received: "+dataStr);
+							int candidateCount = 0;
+							start:{
+								candidateCount = 0;
+								sock.receive(packet);
+								long ts = System.currentTimeMillis();
+								final String dataStr = new String(packet.getData(), "ASCII");
+
+								for(Member m : members){
+									if(m.address.equals(packet.getAddress())){
+										m.setLastRxPacket(ts);
+										final Matcher matcher = integer.matcher(dataStr);
+										if(!matcher.find()){
+											throw new NumberFormatException("invalid priority(int) received: "+dataStr);
+										}
+										final int otherPriority = Integer.parseInt(matcher.group(1));
+										m.setPriority(otherPriority);
+										logger.info("Received packet: "+dataStr+" from: "+m);
+										
+										if(m.getPriority() < priority){
+											candidateCount++;
+										}else if(m.getPriority() == priority && (!State.UNDEFINED.equals(state) || count == 0)){//handle initial UNDEFINED state
+											state = State.UNDEFINED;
+											listener.onStateChange(state);
+											break start;
+										}
 									}
-									final int otherPriority = Integer.parseInt(matcher.group(1));
-									m.setPriority(otherPriority);
-									logger.info("Received packet: "+dataStr+" from: "+m);
 								}
 							}
-							
-							int candidateCount =0;
-							for(Member m: members){
-								if(m.getPriority() < priority && (ts - m.getLastRxPacket() < timeout_ms)){
-									candidateCount++;
-								}else if(m.getPriority() > priority && (ts - m.getLastRxPacket() > timeout_ms)){
-									candidateCount++;
-								}else if(m.getPriority() == priority && (!State.UNDEFINED.equals(state) || count == 0)){//handle initial UNDEFINED state
-									state = State.UNDEFINED;
-									listener.onStateChange(state);
-								}
-							}
+
 							logger.info("candidateCount: "+candidateCount);
 							if(candidateCount > 0 && !State.MASTER.equals(state)){
 								state = State.MASTER;
@@ -265,6 +266,7 @@ public class ClusterMember {
 								state = State.SLAVE;
 								listener.onStateChange(state);
 							}
+							
 							count++;
 						}catch(NumberFormatException nfe){
 							nfe.printStackTrace();
