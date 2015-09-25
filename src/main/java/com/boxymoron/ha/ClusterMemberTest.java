@@ -29,11 +29,19 @@ public class ClusterMemberTest {
 		ClusterMember.joinCluster(new Listener(){
 			@Override
 			public void onStateChange(State state) {
-				//logger.info("State changed to: "+state);
+				logger.info("State changed to: "+state);
 			}
 			
 		});
-		Thread.sleep(999999999);
+		while(true){
+			logger.info("State: "+ClusterMember.state);
+			try{
+			Thread.sleep(21000);
+			}catch(InterruptedException ie){
+				Thread.interrupted();
+				ie.printStackTrace();
+			}
+		}
 		
 	}
 	private static void setPortForwarding(int port) throws IOException, FileNotFoundException, NatPmpException {

@@ -68,6 +68,8 @@ public class ClusterMember {
 	private static CountDownLatch latch = new CountDownLatch(1);
 	
 	private static Thread statusThread = null;
+	
+	public static volatile State state = State.UNDEFINED;
 
 	/**
 	 * Valid states.
@@ -146,8 +148,6 @@ public class ClusterMember {
 		public void onStateChange(State state);
 	}
 
-	private static volatile State state = State.UNDEFINED;
-
 	/**
 	 * This method blocks until an initial state is determined. This can take up to {@link ClusterMember#timeout_ms} milliseconds
 	 * @param listener
@@ -224,7 +224,9 @@ public class ClusterMember {
 					}
 					
 					try {
-						Thread.sleep(500);
+						if(!Thread.interrupted()){
+							Thread.sleep(500);
+						}
 					} catch (InterruptedException e) {
 						Thread.interrupted();
 					}
@@ -251,7 +253,16 @@ public class ClusterMember {
 						for(Member member : members){
 							final DatagramPacket packet = new DatagramPacket(buff, 0, buff.length, member.getAddress(), port);
 							logger.info("Sending priority: "+priority+" to: "+member);
-							socket.send(packet);
+							try{
+								socket.send(packet);
+							}catch(IOException ioe2){
+								ioe2.printStackTrace();
+								//the show must go on
+								if(socket.isClosed()){
+									socket.disconnect();
+									socket = new DatagramSocket();
+								}
+							}
 						}
 						try{
 							Thread.sleep(timeout_ms/2);
@@ -282,7 +293,9 @@ public class ClusterMember {
 		final Thread keepAliveThread = new Thread(new Runnable(){
 			@Override
 			public void run() {
-				try(final DatagramSocket sock = new DatagramSocket(port);){
+				DatagramSocket sock = null;
+				try{
+					sock = new DatagramSocket(port);
 					sock.setSoTimeout(timeout_ms);
 					sock.setTrafficClass(4);
 					byte[] buff = new byte[BUFF_SIZE];
@@ -349,7 +362,10 @@ public class ClusterMember {
 								statusThread.interrupt();
 							}
 							if(sock.isClosed()){
-								throw new RuntimeException("Socket is closed.");
+								sock.disconnect();
+								sock = new DatagramSocket(port);
+								//the show must go on
+								//throw new RuntimeException("Socket is closed.");
 							}
 						}
 					}
