@@ -18,6 +18,7 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -36,6 +37,7 @@ import org.slf4j.LoggerFactory;
  * 
  * The API provides a joinCluster({@link ClusterMember.Listener}) method to register a state changed listener. The listener can then
  * be used to control application specific behavior, such as starting/stopping services, replication, etc.
+ * 
  * 
  * @author Leonardo Rodriguez-Velez
  *
@@ -208,49 +210,57 @@ public class ClusterMember {
 
 			@Override
 			public void run() {
+				AtomicLong ts = new AtomicLong(System.currentTimeMillis());
 				while(true){
-					
-					long ts = System.currentTimeMillis();
-					if(!State.UNDEFINED.equals(state) && members.stream().anyMatch(m -> m.priority == priority)){
-						state = State.UNDEFINED;
-						listener.onStateChange(state);
-						logger.info("State changed to: "+state+" "+4);
-					}else {
-						if(!State.SLAVE.equals(state) && members.stream().anyMatch(m -> !m.isExpired(ts) && m.priority > priority)){
-							state = State.SLAVE;
+					out:{
+						if(System.currentTimeMillis() - ts.get() < timeout_ms){
+							break out;
+						}
+						ts.set(System.currentTimeMillis());
+						if(!State.UNDEFINED.equals(state) && members.stream().anyMatch(m -> m.priority == priority)){
+							state = State.UNDEFINED;
 							listener.onStateChange(state);
-							logger.info("State changed to: "+state+" "+3);
-						}else if(!State.MASTER.equals(state)){
-							final List<Member> membersCurr = members.stream().filter(m -> !m.isExpired(ts)).collect(Collectors.toList());
-							//we add one since the members doesn't include *this* node
-							if((membersCurr.size() + 1) >= ((int)((members.size()+1) / 2) + 1) && membersCurr.stream().allMatch(m -> m.priority < priority)){
-								state = State.MASTER;
-								listener.onStateChange(state);
-								logger.info("State changed to: "+state+" "+5);
-							}
-						}else if(!State.UNDEFINED.equals(state) && members.stream().filter(m -> !m.isExpired(ts)).count() == 0){//I'm running all by myself
-								state = State.UNDEFINED;
-								listener.onStateChange(state);
-								logger.info("State changed to: "+state+" "+7);
-						}else if(State.MASTER.equals(state)){
-							final List<Member> membersCurr = members.stream().filter(m -> !m.isExpired(ts)).collect(Collectors.toList());
-							if(membersCurr.size() > 0 && membersCurr.stream().anyMatch(m -> m.priority > priority)){
+							logger.info("State changed to: "+state+" "+4);
+						}else {
+							if(!State.SLAVE.equals(state) && members.stream().anyMatch(m -> !m.isExpired(ts.get()) && m.priority > priority)){
 								state = State.SLAVE;
 								listener.onStateChange(state);
-								logger.info("State changed to: "+state+" "+6);
-							}else if(membersCurr.size() + 1 < ((int)((members.size()+1) / 2) + 1)){//Network Partition?
-								state = State.UNDEFINED;
-								listener.onStateChange(state);
-								logger.info("State changed to: "+state+" "+8);
+								logger.info("State changed to: "+state+" "+3);
+								break out;
 							}
-						}else{
-							logger.info("State: "+state+" ");
+							if(!State.MASTER.equals(state)){
+								final List<Member> membersCurr = members.stream().filter(m -> !m.isExpired(ts.get())).collect(Collectors.toList());
+								//we add one since the members doesn't include *this* node
+								if((membersCurr.size() + 1) >= ((int)((members.size()+1) / 2) + 1) && membersCurr.stream().allMatch(m -> m.priority < priority)){
+									state = State.MASTER;
+									listener.onStateChange(state);
+									logger.info("State changed to: "+state+" "+5);
+									break out;
+								}
+							} 
+							if(!State.UNDEFINED.equals(state) && members.stream().filter(m -> !m.isExpired(ts.get())).count() == 0){//I'm running all by myself
+									state = State.UNDEFINED;
+									listener.onStateChange(state);
+									logger.info("State changed to: "+state+" "+7);
+							}else if(State.MASTER.equals(state)){
+								final List<Member> membersCurr = members.stream().filter(m -> !m.isExpired(ts.get())).collect(Collectors.toList());
+								if(membersCurr.size() > 0 && membersCurr.stream().anyMatch(m -> m.priority > priority)){
+									state = State.SLAVE;
+									listener.onStateChange(state);
+									logger.info("State changed to: "+state+" "+6);
+								}else if(membersCurr.size() + 1 < ((int)((members.size()+1) / 2) + 1)){//Network Partition?
+									state = State.UNDEFINED;
+									listener.onStateChange(state);
+									logger.info("State changed to: "+state+" "+8);
+								}
+							}else{
+								logger.info("State: "+state+" ");
+							}
 						}
 					}
-					
 					try {
 						if(!Thread.interrupted()){
-							Thread.sleep(500);
+							Thread.sleep(1000);
 						}
 					} catch (InterruptedException e) {
 						Thread.interrupted();
@@ -327,14 +337,12 @@ public class ClusterMember {
 					int count = 0;
 					final DatagramPacket packet = new DatagramPacket(buff, BUFF_SIZE);
 					while(true){
-						try{;
+						try{
 							long ts;
 							start:{
 								sock.receive(packet);
 								ts = System.currentTimeMillis();
-								if(statusThread != null){
-									statusThread.interrupt();
-								}
+								
 								final String dataStr = new String(packet.getData(), "ASCII");
 
 								for(Member m : members){
@@ -354,6 +362,9 @@ public class ClusterMember {
 											break start;
 										}
 									}
+								}
+								if(statusThread != null){
+									statusThread.interrupt();
 								}
 							}
 							
