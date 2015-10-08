@@ -27,7 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * This class implements a simple Partition-Tolerant Leader election algorithm (over UDP). The algorithm is essentially a state machine:<br><br>
+ * This class implements a simple Leader election algorithm (over UDP) similar to Raft. The algorithm is essentially a state machine:<br><br>
  * The valid states are: MASTER, SLAVE, UNDEFINED<br><br>
  * <li>Each node in the cluster maintains a static list of all (other) cluster member IP addresses/hostnames.<br>
  * <li>Each node asynchronously sends a message with its own 'priority' (UDP), which is a an integer in the range 0 - 9999 every {@link ClusterMember#timeout_ms}/2 ms.<br>
