@@ -213,9 +213,6 @@ public class ClusterMember {
 				AtomicLong ts = new AtomicLong(System.currentTimeMillis());
 				while(true){
 					out:{
-						if(System.currentTimeMillis() - ts.get() < timeout_ms){
-							break out;
-						}
 						ts.set(System.currentTimeMillis());
 						if(!State.UNDEFINED.equals(state) && members.stream().anyMatch(m -> m.priority == priority)){
 							state = State.UNDEFINED;
