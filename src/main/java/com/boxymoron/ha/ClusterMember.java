@@ -26,13 +26,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * This class implements a simple HA Master/Slave clustering mechanism through what is essentially a state machine.<br><br>
+ * This class implements a simple Partition-Tolerant Leader election algorithm (over UDP). The algorithm is essentially a state machine:<br><br>
  * The valid states are: MASTER, SLAVE, UNDEFINED<br><br>
- * <li>Each node in the cluster maintains a static list of all cluster member IP addresses/hostnames.<br>
- * <li>Each node sends a message with its own 'priority', which is a an integer in the range 0 - 9999 every {@link ClusterMember#timeout_ms}/2 ms.<br>
+ * <li>Each node in the cluster maintains a static list of all (other) cluster member IP addresses/hostnames.<br>
+ * <li>Each node asynchronously sends a message with its own 'priority' (UDP), which is a an integer in the range 0 - 9999 every {@link ClusterMember#timeout_ms}/2 ms.<br>
  * <li>Each node listens to all other node's messages.<br>
- * <li>The node with the highest priority becomes the MASTER.<br><br>
- * For this mechanism to work correctly, each node should have a different priority. Currently, only two nodes are supported ;)<br><br>
+ * <li>The node with the highest priority, in a majority partition, becomes the MASTER.<br><br>
+ * For this mechanism to work correctly, each node should have a distinct priority. Currently, only odd numbers of nodes >= 3 are supported ;)<br><br>
  * 
  * The API provides a joinCluster({@link ClusterMember.Listener}) method to register a state changed listener. The listener can then
  * be used to control application specific behavior, such as starting/stopping services, replication, etc.
@@ -56,9 +56,20 @@ public class ClusterMember {
 	 * The number of milliseconds to wait for a ping from *any* other member in the cluster.
 	 */
 	private static int timeout_ms = 30000;
+	
+	/**
+	 * The port for UDP. This should be the same on all nodes.
+	 */
 	private static int port = 8888;
+	
+	/**
+	 * A list of other nodes in this cluster.
+	 */
 	private static List<Member> members = new ArrayList<Member>();
 
+	/**
+	 * The priority of this node, between 0 and 9999 (inclusive)
+	 */
 	private static int priority;
 
 	private static volatile boolean isInitialized = false;
@@ -66,10 +77,16 @@ public class ClusterMember {
 	private static AtomicInteger timeoutCount = new AtomicInteger();
 	private static AtomicInteger totalTimeoutCount = new AtomicInteger(); 
 
+	/**
+//	 * This is used to block the calling thread(main?) until an initial state is selected.
+	 */
 	private static CountDownLatch latch = new CountDownLatch(1);
 	
 	private static Thread statusThread = null;
 	
+	/**
+	 * The initial state of each node is always 'UNDEFINED'.
+	 */
 	public static volatile State state = State.UNDEFINED;
 
 	/**
@@ -150,11 +167,13 @@ public class ClusterMember {
 	}
 
 	/**
-	 * This method blocks until an initial state is determined. This can take up to {@link ClusterMember#timeout_ms} milliseconds
+	 * This method blocks until an initial state is determined. This can take up to {@link ClusterMember#timeout_ms} * 2 milliseconds. 
+	 * This method should only be called once during the lifetime of this process!
 	 * @param listener
 	 * @throws FileNotFoundException
 	 * @throws IOException
 	 * @throws InterruptedException
+	 * @throws IllegalStateException if called more than once.
 	 */
 	public static synchronized void joinCluster(final Listener listener) throws FileNotFoundException, IOException, InterruptedException {
 		if(isInitialized){
@@ -196,25 +215,26 @@ public class ClusterMember {
 						state = State.UNDEFINED;
 						listener.onStateChange(state);
 						logger.info("State changed to: "+state+" "+4);
-					}else if(!State.MASTER.equals(state) && members.stream().allMatch(m -> m.isExpired(ts))){
-						state = State.MASTER;
-						listener.onStateChange(state);
-						logger.info("State changed to: "+state+" "+1);
-					} else {
+					}else {
 						if(!State.SLAVE.equals(state) && members.stream().anyMatch(m -> !m.isExpired(ts) && m.priority > priority)){
 							state = State.SLAVE;
 							listener.onStateChange(state);
 							logger.info("State changed to: "+state+" "+3);
 						}else if(!State.MASTER.equals(state)){
 							final List<Member> membersCurr = members.stream().filter(m -> !m.isExpired(ts)).collect(Collectors.toList());
-							if(membersCurr.size() > 0 && membersCurr.stream().allMatch(m -> m.priority < priority)){
+							//we add one since the members doesn't include *this* node
+							if((membersCurr.size() + 1) >= ((int)((members.size()+1) / 2) + 1) && membersCurr.stream().allMatch(m -> m.priority < priority)){
 								state = State.MASTER;
 								listener.onStateChange(state);
 								logger.info("State changed to: "+state+" "+5);
 							}
+						}else if(!State.SLAVE.equals(state) && members.stream().filter(m -> !m.isExpired(ts)).count() == 0){
+								state = State.SLAVE;
+								listener.onStateChange(state);
+								logger.info("State changed to: "+state+" "+7);
 						}else if(!State.SLAVE.equals(state)){
-							final List<Member> membersExp = members.stream().filter(m -> !m.isExpired(ts)).collect(Collectors.toList());
-							if(membersExp.size() > 0 && membersExp.stream().allMatch(m -> m.priority > priority)){
+							final List<Member> membersCurr = members.stream().filter(m -> !m.isExpired(ts)).collect(Collectors.toList());
+							if(membersCurr.size() > 0 && membersCurr.stream().anyMatch(m -> m.priority > priority)){
 								state = State.SLAVE;
 								listener.onStateChange(state);
 								logger.info("State changed to: "+state+" "+6);
