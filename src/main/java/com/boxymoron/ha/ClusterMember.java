@@ -228,16 +228,20 @@ public class ClusterMember {
 								listener.onStateChange(state);
 								logger.info("State changed to: "+state+" "+5);
 							}
-						}else if(!State.SLAVE.equals(state) && members.stream().filter(m -> !m.isExpired(ts)).count() == 0){
-								state = State.SLAVE;
+						}else if(!State.UNDEFINED.equals(state) && members.stream().filter(m -> !m.isExpired(ts)).count() == 0){//I'm running all by myself
+								state = State.UNDEFINED;
 								listener.onStateChange(state);
 								logger.info("State changed to: "+state+" "+7);
-						}else if(!State.SLAVE.equals(state)){
+						}else if(State.MASTER.equals(state)){
 							final List<Member> membersCurr = members.stream().filter(m -> !m.isExpired(ts)).collect(Collectors.toList());
 							if(membersCurr.size() > 0 && membersCurr.stream().anyMatch(m -> m.priority > priority)){
 								state = State.SLAVE;
 								listener.onStateChange(state);
 								logger.info("State changed to: "+state+" "+6);
+							}else if(membersCurr.size() + 1 < ((int)((members.size()+1) / 2) + 1)){//Network Partition?
+								state = State.UNDEFINED;
+								listener.onStateChange(state);
+								logger.info("State changed to: "+state+" "+8);
 							}
 						}else{
 							logger.info("State: "+state+" ");
