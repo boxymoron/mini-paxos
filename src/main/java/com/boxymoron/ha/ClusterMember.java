@@ -37,8 +37,13 @@ import org.slf4j.LoggerFactory;
  * 
  * The API provides a joinCluster({@link ClusterMember.Listener}) method to register a state changed listener. The listener can then
  * be used to control application specific behavior, such as starting/stopping services, replication, etc.
- * 
- * 
+ * <br>
+ * <br>
+ * Notes/TODO:<br>
+ * <li>Look into UDP multicast, so non-cluster members can monitor status?
+ * <li>Look into TCP, so network connection issues can be detected more rapidly (at the expense of TCP/network congestion issues).
+ * <br>
+ * <br>
  * @author Leonardo Rodriguez-Velez
  *
  */
