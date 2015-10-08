@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -54,7 +55,7 @@ public class ClusterMember {
 	/**
 	 * The number of milliseconds to wait for a ping from *any* other member in the cluster.
 	 */
-	private static int timeout_ms = 31000;
+	private static int timeout_ms = 30000;
 	private static int port = 8888;
 	private static List<Member> members = new ArrayList<Member>();
 
@@ -179,7 +180,7 @@ public class ClusterMember {
 		startPriorityRXThread(caller, listener);
 		
 		isInitialized = true;
-		Thread.sleep(timeout_ms);
+		latch.await(timeout_ms * 2, TimeUnit.MILLISECONDS);
 		statusThread = startStatusThread(listener);
 	}
 

@@ -36,7 +36,7 @@ public class ClusterMemberTest {
 		while(true){
 			logger.info("State: "+ClusterMember.state);
 			try{
-			Thread.sleep(21000);
+			Thread.sleep(3000);
 			}catch(InterruptedException ie){
 				Thread.interrupted();
 				ie.printStackTrace();
