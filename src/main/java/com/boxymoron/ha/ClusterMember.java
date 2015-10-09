@@ -256,7 +256,7 @@ public class ClusterMember {
 									logger.info("State changed to: "+state+" "+8);
 								}
 							}else{
-								logger.info("State: "+state+" ");
+								//logger.info("State: "+state+" ");
 							}
 						}
 					}
@@ -289,7 +289,7 @@ public class ClusterMember {
 					while(true){
 						for(Member member : members){
 							final DatagramPacket packet = new DatagramPacket(buff, 0, buff.length, member.getAddress(), port);
-							logger.info("Sending priority: "+priority+" to: "+member);
+							logger.debug("Sending priority: "+priority+" to: "+member);
 							try{
 								socket.send(packet);
 							}catch(IOException ioe2){
@@ -311,6 +311,7 @@ public class ClusterMember {
 					ioe.printStackTrace();
 					listener.onStateChange(State.UNDEFINED);
 					caller.interrupt();
+					//TODO maybe interrupt the status thread??
 				}finally{
 					if(socket != null){
 						socket.close();
@@ -380,7 +381,7 @@ public class ClusterMember {
 							}
 						}catch(SocketTimeoutException ste){
 							//ste.printStackTrace();
-							logger.info("Packet timed out.");
+							logger.debug("Packet timed out.");
 							totalTimeoutCount.incrementAndGet();
 							timeoutCount.incrementAndGet();
 							if(statusThread != null){
