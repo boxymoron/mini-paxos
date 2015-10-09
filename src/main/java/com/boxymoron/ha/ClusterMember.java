@@ -357,7 +357,7 @@ public class ClusterMember {
 										}
 										final int otherPriority = Integer.parseInt(matcher.group(1));
 										m.setPriority(otherPriority);
-										logger.info("Received packet: "+dataStr+" from: "+m);
+										logger.debug("Received packet: "+dataStr+" from: "+m);
 										
 										if(m.getPriority() == priority && (!State.UNDEFINED.equals(state) || count == 0)){//handle initial UNDEFINED state
 											state = State.UNDEFINED;
